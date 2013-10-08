@@ -159,9 +159,6 @@ public class WorkingMessage {
 
     private static final int MMS_MESSAGE_SIZE_INDEX  = 1;
 
-    //flag indicate resend sms that the recipient of conversion is more than one.
-    private boolean mResendMultiRecipients;
-
     /**
      * Callback interface for communicating important state changes back to
      * ComposeMessageActivity.
@@ -236,9 +233,6 @@ public class WorkingMessage {
                 uri = persister.move(uri, Mms.Draft.CONTENT_URI);
             } catch (MmsException e) {
                 LogTag.error("Can't move %s to drafts", uri);
-                return null;
-            } catch (IllegalStateException e) {
-                Log.e(TAG,"kaBOOM! "+ e);
                 return null;
             }
         }
@@ -889,13 +883,7 @@ public class WorkingMessage {
                 mHasMmsDraft = true;
             }
         } else {
-            String content = null;
-            try {
-                content = mText.toString();
-            } catch (NullPointerException npe) {
-                // Catch a blank text when using number longpress to contact via SMS
-                LogTag.debug("[WorkingMessage] discard");
-            }
+            String content = mText.toString();
 
             // bug 2169583: don't bother creating a thread id only to delete the thread
             // because the content is empty. When we delete the thread in updateDraftSmsMessage,
@@ -1328,13 +1316,7 @@ public class WorkingMessage {
 
         // just do a regular send. We're already on a non-ui thread so no need to fire
         // off another thread to do this work.
-        if (mResendMultiRecipients) {
-            Log.d(TAG, "it is resend sms recipient="+recipientsInUI);
-            sendSmsWorker(msgText, recipientsInUI, threadId);
-            mResendMultiRecipients = false;
-        } else {
-            sendSmsWorker(msgText, semiSepRecipients, threadId);
-        }
+        sendSmsWorker(msgText, semiSepRecipients, threadId);
 
         // Be paranoid and clean any draft SMS up.
         deleteDraftSmsMessage(threadId);
@@ -1537,9 +1519,6 @@ public class WorkingMessage {
         cursor = SqliteWrapper.query(context, cr,
                 Mms.Draft.CONTENT_URI, MMS_DRAFT_PROJECTION,
                 selection, null, null);
-        if (cursor == null) {
-            return null;
-        }
 
         Uri uri;
         try {
@@ -1600,9 +1579,6 @@ public class WorkingMessage {
             slideshow.sync(pb);
             return res;
         } catch (MmsException e) {
-            return null;
-        } catch (IllegalStateException e) {
-            Log.e(TAG,"failed to create draft mms "+ e);
             return null;
         }
     }
@@ -1829,14 +1805,6 @@ public class WorkingMessage {
         // to clear those messages as well as ones with a valid thread id.
         final String where = Mms.THREAD_ID +  (threadId > 0 ? " = " + threadId : " IS NULL");
         asyncDelete(Mms.Draft.CONTENT_URI, where, null);
-    }
-
-    public void setResendMultiRecipients(boolean bResendMultiRecipients) {
-        mResendMultiRecipients = bResendMultiRecipients;
-    }
-
-    public boolean getResendMultiRecipients() {
-        return mResendMultiRecipients;
     }
 
     /**
